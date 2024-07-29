@@ -19,6 +19,15 @@ tier1_rate = 55.26
 tier2_rate = 60.65
 tier3_rate = 53.91
 
+# Function to calculate projected income based on the tiered reimbursement model
+def calculate_projected_income(annual_wrvu):
+    if annual_wrvu <= tier1_threshold:
+        income = annual_wrvu * tier1_rate
+    elif annual_wrvu <= tier2_threshold:
+        income = (tier1_threshold * tier1_rate) + ((annual_wrvu - tier1_threshold) * tier2_rate)
+    else:
+        income = (tier1_threshold * tier1_rate) + ((tier2_threshold - tier1_threshold) * tier2_rate) + ((annual_wrvu - tier2_threshold) * tier3_rate)
+    return income
 
 class ProjectionCalculator:
     def __init__(self, new_patients, established_patients, sessions_per_week, weeks_per_year, new_code_dist,
@@ -222,10 +231,42 @@ with tab1:
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col6:
-        st.subheader("Projections and Summary")
+        # Calculate projections
         calculator = ProjectionCalculator(new_patients, 0, sessions_per_week, weeks_per_year, new_code_dist, {},
                                           diagnosis_dist, juice_ratio, avg_wrvu)
-        calculator.display_projections()
+        monthly_wrvu, annual_wrvu, monthly_office_wrvu, monthly_or_wrvu, pop_patients, sui_patients, oab_patients = calculator.calculate_projections()
+
+        st.markdown('<div class="row-2-col-3">', unsafe_allow_html=True)
+        st.subheader("Summary")
+
+        # Calculate total wRVUs
+        total_monthly_office_wrvu = monthly_office_wrvu
+        total_annual_office_wrvu = monthly_office_wrvu * 12
+        total_monthly_or_wrvu = monthly_or_wrvu
+        total_annual_or_wrvu = monthly_or_wrvu * 12
+
+        # Create a DataFrame for wRVU summary
+        wrvu_data = {
+            'POP': [monthly_office_wrvu * diagnosis_dist['POP'], monthly_or_wrvu * diagnosis_dist['POP'],
+                    total_monthly_office_wrvu * diagnosis_dist['POP'], total_annual_or_wrvu * diagnosis_dist['POP']],
+            'SUI': [monthly_office_wrvu * diagnosis_dist['SUI'], monthly_or_wrvu * diagnosis_dist['SUI'],
+                    total_monthly_office_wrvu * diagnosis_dist['SUI'], total_annual_or_wrvu * diagnosis_dist['SUI']],
+            'OAB': [monthly_office_wrvu * diagnosis_dist['OAB'], monthly_or_wrvu * diagnosis_dist['OAB'],
+                    total_monthly_office_wrvu * diagnosis_dist['OAB'], total_annual_or_wrvu * diagnosis_dist['OAB']],
+            'Total': [total_monthly_office_wrvu, total_monthly_or_wrvu, total_annual_office_wrvu, total_annual_or_wrvu]
+        }
+        wrvu_df = pd.DataFrame(wrvu_data, index=['Monthly Office', 'Monthly OR', 'Annual Office', 'Annual OR'])
+
+        # Display DataFrame
+        st.dataframe(wrvu_df)
+
+        # Calculate projected income
+        projected_income = calculate_projected_income(annual_wrvu)
+
+        # Display projected income
+        st.subheader(f"Projected: ${projected_income:,.2f}")
+
+        st.markdown('</div>', unsafe_allow_html=True)
 
 with tab2:
     col1, col2, col3 = st.columns(3)
